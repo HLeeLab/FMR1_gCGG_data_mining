@@ -14,15 +14,15 @@ set -euo pipefail
 module load bedtools
 
 # Define directories
-bed_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/ref/hg19_regions_of_interest/hg19_ensembl_annotations"
-region_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/ref/hg19_regions_of_interest"
-output_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/overlap_hg19"
+bed_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/hg19_regions_of_interest/hg19_ensembl_annotations"
+region_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/hg19_regions_of_interest"
+output_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/overlap_hg19/dmr_liu_jaenisch/"
 
 # Create output folder if it doesn't exist
 mkdir -p "$output_folder"
 
 # Input files
-LIU_BED="$region_folder/Liu_Jaenisch_FXS_supplemental1.bed"
+LIU_BED="$region_folder/CAS9_DMR.bed"
 GENES_BED="$bed_folder/hg19_ENSBL_GENES_trimmed.bed"
 UP_BED="$bed_folder/hg19_ENSBL_5KB_UP_trimmed.bed"
 DOWN_BED="$bed_folder/hg19_ENSBL_5KB_DOWN_trimmed.bed"

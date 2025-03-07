@@ -4,7 +4,6 @@
 #SBATCH --time=24:00:00
 #SBATCH --nodes=1 # Number of nodes (1 node)
 #SBATCH --ntasks-per-node=48 # Number of tasks per node (24 cores)
-#SBATCH --mem=96G # Memory allocation (96 GB)
 #SBATCH --gres=gpu:4 # 
 #SBATCH -A hlee308_gpu # Account for billing
 #SBATCH --output=/home/cnorton5/data_hlee308/cnorton5/logs/BED_TO_BIGWIG.log # Standard output log file
@@ -15,9 +14,9 @@ cd /home/cnorton5 || exit 1
 
 # Set base directories
 base_dir=/home/cnorton5/scr4_hlee308/
-input_dir="$base_dir/cnorton5/old_nanopore/ONT_HG01_hg19/barcoded_bams_simplex"
-project_dir="$base_dir/cnorton5/old_nanopore/ONT_HG01_hg19"
-output_dir="$base_dir/cnorton5/old_nanopore/ONT_HG01_hg19/meth_bigwigs"
+input_dir="$base_dir/cnorton5/old_nanopore/ONT_HG02_hg19_full/methylbed"
+project_dir="$base_dir/cnorton5/old_nanopore/ONT_HG02_hg19_full"
+output_dir="$base_dir/cnorton5/old_nanopore/ONT_HG02_hg19_full/meth_bigwigs"
 
 chrom_sizes="/home/cnorton5/data_hlee308/cnorton5/ref/hg19.chrom.sizes"
 
@@ -28,12 +27,13 @@ bed_files=$(find $input_dir -name "*.bed")
 
 #Iterate over all bed files
 for bed_file in $bed_files; do
+    echo "Processing $bed_file"
 
     #Let's create a temporory bed_file that only includes column1 values that are located in the first column of the chrom_sizes file
     awk 'NR==FNR{a[$1];next}($1 in a)' $chrom_sizes $bed_file > "$output_dir/temp.bed"
 
     #Sort the bed file by chromosome
-    sort -k1,1 -k2,2n "$output_dir/temp.bed" > "$output_dir/temp.sorted.bed"
+    sort -k1,1 -k2,2n "$output_dir/temp.bed" > "$output_dir/temp.sorted.bed" 
 
     #Overwrite the temp.bed file with the sorted bed file
     mv "$output_dir/temp.sorted.bed" "$output_dir/temp.bed"
@@ -42,12 +42,8 @@ for bed_file in $bed_files; do
     #Extract the sample name from the bed file
     sample_name=$(basename $bed_file .bed)
 
-    #convert into two temp files, depending on hmc or mC 
-    #modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes h --nthreads 12 $bed_file "$output_dir/$sample_name.hmc.bw"
-    #modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes m --nthreads 12 $bed_file "$output_dir/$sample_name.mc.bw"
-
-    modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes h --nthreads 12 "$output_dir/temp.bed" "$output_dir/$sample_name.hmc.bw"
-    modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes m --nthreads 12 "$output_dir/temp.bed" "$output_dir/$sample_name.mc.bw"
+    modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes h --nthreads 24 "$output_dir/temp.bed" "$output_dir/$sample_name.hmc.bw"
+    modkit bedmethyl tobigwig  --sizes $chrom_sizes --mod-codes m --nthreads 24 "$output_dir/temp.bed" "$output_dir/$sample_name.mc.bw"
 
     #Remove the temp file
     rm "$output_dir/temp.bed"

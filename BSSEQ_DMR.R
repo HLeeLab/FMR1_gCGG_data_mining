@@ -13,8 +13,8 @@ library(BiocParallel)
 #Load the data
 base_dir<- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore"
 output_folder=paste0(base_dir, "/DMR_Results_hg19")
-input_folder1=paste0(base_dir,"/ONT_HG01_hg19/meth_bed")
-input_folder2=paste0(base_dir,"/ONT_HG02_hg19/meth_bed")
+input_folder1=paste0(base_dir,"/ONT_HG01_hg19/methylbed")
+input_folder2=paste0(base_dir,"/ONT_HG02_hg19/methylbed")
 
 
 files <- c(
@@ -25,8 +25,9 @@ files <- c(
 )
 
 
-bsseq_nano <- bsseq::read.modkit(files, rmZeroCov = FALSE, strandCollapse=TRUE)
+bsseq_nano <- bsseq::read.modkit(files, rmZeroCov = TRUE, strandCollapse=TRUE)
 
+bsseq_nano <- sort(bsseq_nano)
 #Let's save the object
 saveRDS(bsseq_nano, file=paste0(output_folder, "/bsseq_nano.RData"))
 
@@ -34,6 +35,8 @@ saveRDS(bsseq_nano, file=paste0(output_folder, "/bsseq_nano.RData"))
 bsseq_nano <- readRDS(file=paste0(output_folder, "/bsseq_nano.RData"))
 
 #Smooth the object
+## TODO WHY WON"T THIS SMOOTH
+## maybe try: less workers (4), smaller gap, smaller h
 bsseq_nano_smooth <- BSmooth(BSseq = bsseq_nano, ns=70, h=1000, maxGap = 10^8, BPPARAM = MulticoreParam(workers = 8, progressbar = TRUE))
 
 #Now that the object is smoothed, let's save it
@@ -53,7 +56,7 @@ control <- grep("barcode01", samples, value = TRUE)
 test <- grep("barcode04", samples, value = TRUE)
 
 #DMR finder
-tstat <- BSmooth.tstat(bsseq_nano_smooth, test, control, estimate.var="same", verbose=FALSE, local.correct=TRUE, mc.cores=16)
+tstat <- BSmooth.tstat(bsseq_nano_smooth, test, control, estimate.var="same", verbose=FALSE, local.correct=FALSE, mc.cores=8)
 regions <- dmrFinder(tstat, stat="tstat", cutoff=c(-3,3), maxGap=300, verbose=TRUE)
 regions <- regions[regions$n > 4]
 

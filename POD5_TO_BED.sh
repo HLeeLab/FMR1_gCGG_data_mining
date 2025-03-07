@@ -22,6 +22,8 @@ methylbed_dir="$project_dir/methylbed"
 ref_file=/home/cnorton5/data_hlee308/cnorton5/ref/hg19.fa
 
 module load samtools
+module load tabix
+module load bedtools
 
 #Check for executables
 command -v pod5 >/dev/null 2>&1 || { echo "pod5 not found"; exit 1; }
@@ -104,5 +106,11 @@ done
 
 # Move all bed files to methylbed_dir
 mv "$barcoded_bams_dir"/*.bed "$methylbed_dir"
+
+#Let's zip and index the .bed files in methyl_bed
+for file in "$methylbed_dir"/*.bed; do
+    bgzip -c "$file" > "$file".gz
+    tabix -p bed "$file".gz
+done
 
 echo "Processing complete!"

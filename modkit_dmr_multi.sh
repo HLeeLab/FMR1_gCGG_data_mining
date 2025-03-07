@@ -5,8 +5,8 @@
 #SBATCH --nodes=1 # Number of nodes (1 node)
 #SBATCH --ntasks-per-node=32
 #SBATCH -A hlee308 # Account for billing
-#SBATCH --output=/home/cnorton5/data_hlee308/cnorton5/logs/modkit_segment.log # Standard output log file
-#SBATCH --error=/home/cnorton5/data_hlee308/cnorton5/logs/modkit_segment_err.log # Error log file
+#SBATCH --output=/home/cnorton5/data_hlee308/cnorton5/logs/modkit_multi.log # Standard output log file
+#SBATCH --error=/home/cnorton5/data_hlee308/cnorton5/logs/modkit_multi_err.log # Error log file
 
 # Set the working directory to the user's home directory 
 cd /home/cnorton5 || exit 1
@@ -31,32 +31,42 @@ ref=/home/cnorton5/data_hlee308/cnorton5/ref/hg19.fa
 [ -f $ref ] || { echo "Reference file not found! $ref"; exit 1; }
 
 
-dmr_result="$out_dir/cpgislands_dmr.bed"
+regions="$base_dir/hg19_regions_of_interest/Liu_Jaenisch_FXS_supplemental1.bed"
+dmr_result="$out_dir/Liu_Jaenisch_dmr.bed"
+ind_seg_result="$out_dir/1v4_ind_segment.bed"
+seg_result="$out_dir/1v4_segment.bed"
 
 threads=32
 
-s1="$base_dir/ONT_HG01_hg19/meth_bed/hg19_barcode01.sorted.bed.gz"
-s1a="$base_dir/ONT_HG02_hg19/meth_bed/EXP-NBD104_barcode01.sorted.bed.gz"
-s2="$base_dir/ONT_HG01_hg19/meth_bed/hg19_barcode04.sorted.bed.gz"
-s2a="$base_dir/ONT_HG02_hg19/meth_bed/EXP-NBD104_barcode04.sorted.bed.gz"
+s1="$base_dir/ONT_HG01_hg19/methylbed/hg19_barcode01.sorted.bed.gz"
+s1a="$base_dir/ONT_HG02_hg19_full/methylbed/EXP-NBD104_barcode01.bed.gz"
+s2="$base_dir/ONT_HG01_hg19/methylbed/hg19_barcode04.sorted.bed.gz"
+s2a="$base_dir/ONT_HG02_hg19_full/methylbed/EXP-NBD104_barcode04.bed.gz"
 
 
 
 modkit dmr multi \
   -s ${s1} cont1 \
-  -s ${s1a} cont2 \
-  -s ${s2} treat1 \
-  -s ${s2a} treat2 \
+  -s ${s1a} cont2\
+  -s ${s2} treat1\
+  -s ${s2a} treat2\
   -o ${dmr_result} \
-  --regions ${dmr_segments} \
+  --regions ${regions} \
   --ref ${ref} \
   --base C \
   --threads ${threads} \
   --force
 
-#Remove individual dmr_result
-rm $dmr_result
 
-#Remove all segments that are not in canonical chromosomes
-awk '$1 ~ /^chr[0-9XYM]+$/' $dmr_segments > ${dmr_segments}.tmp
-mv ${dmr_segments}.tmp $dmr_segments
+modkit dmr pair \
+  -a ${s1} \
+  -a ${s1a} \
+  -b ${s2} \
+  -b ${s2a} \
+  -o ${ind_seg_result} \
+  --segment ${seg_result} \
+  --ref ${ref} \
+  --base C \
+  --threads ${threads} \
+  --force
+

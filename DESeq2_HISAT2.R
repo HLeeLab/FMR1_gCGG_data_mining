@@ -14,15 +14,26 @@ library(tidyverse)
 library(data.table)
 
 # Define directories (adjust these paths to your setup)
-base_dir <- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/hg19/rna_seq"
-bam_dir  <- file.path(base_dir, "hisat2_results")  # Directory containing BAM files
+base_dir <- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/RNA_HG01_hg19/"
+out_dir <- paste0(base_dir, "FXS_CGG_ONLY_vs_NHG3_dCAS9/")
+bam_dir  <- file.path(base_dir, "hisat2_hg19")  # Directory containing BAM files
 ref_dir  <- "/home/cnorton5/data_hlee308/cnorton5/ref"
+
+#Make the output directory if it doesn't exist
+if (!dir.exists(out_dir)) {dir.create(out_dir)}
 
 # Define path to the GTF annotation file
 annotation_file <- file.path(ref_dir, "hg19.67.ensGene.gtf")
 
 # List BAM files (assumes files end with .bam)
 bam_files <- list.files(bam_dir, pattern = "\\.bam$", full.names = TRUE, recursive=TRUE)
+
+#Let's filter only bam files that include sample names:
+sample_names <- c("HG01mRNA-CGGonly_24d_mT_1", "HG01mRNA-CGGonly_24d_mT_2",
+                  "HG02mRNA-FXS_gNHG3_36d_1","HG02mRNA-FXS_gNHG3_36d_2")
+
+bam_files <- bam_files <- bam_files[grepl(paste(sample_names, collapse = "|"), bam_files)]
+
 # Name the vector using the file base names (without directory path)
 names(bam_files) <- basename(bam_files)
 
@@ -46,10 +57,10 @@ counts <- fc$counts
 
 #Save the feature counts table
 write.csv(as.data.frame(counts),
-          file = file.path(base_dir, "/hisat2_counts.csv"))
+          file = file.path(out_dir, "/hisat2_counts.csv"))
 
 #Read csv
-counts <- fread(file = file.path(base_dir, "/hisat2_counts.csv"), header = TRUE, data.table = FALSE)
+counts <- fread(file = file.path(out_dir, "/hisat2_counts.csv"), header = TRUE, data.table = FALSE)
 
 #Set row names to the first column
 row.names(counts) <- counts$V1
@@ -76,14 +87,14 @@ res <- res[order(res$padj, na.last = NA), ]
 
 # Save DESeq2 results and counts to CSV files
 write.csv(as.data.frame(res),
-          file = file.path(base_dir, "hisat_deseq2_results.csv"))
+          file = file.path(out_dir, "hisat_deseq2_results.csv"))
 
 # --------------------
 # PCA Plot
 # --------------------
 vsd <- vst(dds, blind = FALSE)
 pcaData <- plotPCA(vsd, intgroup = "condition", returnData = TRUE)
-pdf(file = file.path(base_dir, "hisat2_PCA_plot.pdf"))
+pdf(file = file.path(out_dir, "hisat2_PCA_plot.pdf"))
 ggplot(pcaData, aes(PC1, PC2, color = condition)) +
   geom_point(size = 3) +
   theme_minimal() +
@@ -102,7 +113,7 @@ volcano_data$gene <- rownames(volcano_data)
 volcano_data$label <- ifelse(-log10(volcano_data$padj) > 20 | volcano_data$gene == "FMR1",
                              volcano_data$gene, "")
 
-pdf(file = file.path(base_dir, "hisat2_volcano_plot.pdf"))
+pdf(file = file.path(out_dir, "hisat2_volcano_plot.pdf"))
 ggplot(volcano_data, aes(x = log2FoldChange, y = -log10(padj), color = significance)) +
   geom_point() +
   geom_text(aes(label = label), vjust = -0.5, hjust = 0.5, size = 3, check_overlap = TRUE) +

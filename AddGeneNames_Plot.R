@@ -1,7 +1,7 @@
 library(data.table)
 library(ggplot2)
 
-output_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/overlap_hg19"
+output_folder="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/overlap_hg19/dmr_liu_jaenisch"
 gene_mapping="/home/cnorton5/data_hlee308/cnorton5/ref/hg19_other/tx2gene_hg19.67.csv"
 
 table1 <- fread(paste0(output_folder, "/overlap_matrix.tsv"), sep="\t")
