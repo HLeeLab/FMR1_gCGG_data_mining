@@ -19,35 +19,39 @@ base_dir<- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore"
 
 #Let's read the gene table from overlaps
 cas9_genes_all <- fread(paste0(base_dir, "/overlap_hg19/cas9_overlap_matrix_gene.tsv"), header=TRUE, sep="\t")
-de_genes_all <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXSdCAS9_CGG_vs_CGG_ONLY/hisat_deseq2_results.csv"), header=TRUE, sep=",")
-de_fxswt_genes_all <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_WT_dCAS9/hisat_deseq2_results.csv"), header=TRUE, sep=",")
+de_CGGFXS_vs_FXS <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_dCAS9_CGG/hisat_deseq2_results.csv"), header=TRUE, sep=",")
+de_FXS_vs_WT <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_WT_dCAS9/hisat_deseq2_results.csv"), header=TRUE, sep=",")
+de_NHG3FXS_vs_FXS <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_NHG3_dCAS9/hisat_deseq2_results.csv"), header=TRUE, sep=",")
 dmr_cas9_genes <- fread(paste0(base_dir, "/overlap_hg19/dmr_liu_jaenisch/overlap_matrix_gene.tsv"), header=TRUE, sep="\t")
 
 #Rename the first column of both to gene_id
 setnames(cas9_genes_all, "Gene", "gene")
 setnames(dmr_cas9_genes, "Gene", "gene")
-setnames(de_genes_all, "V1", "gene")
-setnames(de_fxswt_genes_all, "V1", "gene")
+setnames(de_CGGFXS_vs_FXS, "V1", "gene")
+setnames(de_NHG3FXS_vs_FXS, "V1", "gene")
+setnames(de_FXS_vs_WT, "V1", "gene")
 
 #Let's filter each to only include genes that are in each
-intersect <- intersect(cas9_genes_all$gene, de_genes_all$gene)
+intersect <- intersect(cas9_genes_all$gene, de_CGGFXS_vs_FXS$gene)
 cas9_genes_all <- cas9_genes_all[cas9_genes_all$gene %in% intersect]
-de_genes_all <- de_genes_all[de_genes_all$gene %in% intersect]
+de_CGGFXS_vs_FXS <- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$gene %in% intersect]
 print(length(intersect))
 
-#Let's filter de_genes to only include genes with a p-value < 0.001 and a log2FoldChange > 1.5
-de_genes <- de_genes_all[de_genes_all$padj < 0.05 & de_genes_all$log2FoldChange >= 1,]
+#Let's filter de_CGGFXS_vs_FXS to only include genes with a p-value < 0.001 and a log2FoldChange > 1.5
+de_CGGFXS_vs_FXS_SIG<- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$padj < 0.05 & de_CGGFXS_vs_FXS$log2FoldChange >= 1,]
+de_FXS_vs_WT_SIG <- de_FXS_vs_WT[de_FXS_vs_WT$padj < 0.05 & de_FXS_vs_WT$log2FoldChange >= 1,]
+de_NHG3FXS_vs_FXS_SIG <- de_NHG3FXS_vs_FXS[de_NHG3FXS_vs_FXS$padj < 0.05 & de_NHG3FXS_vs_FXS$log2FoldChange >= 1,]
 
 #Let's filter cas9_genes to only include genes with "ANY" > 0
 cas9_genes <- cas9_genes_all[ANY > 0,]
 dmr_cas9_genes <- dmr_cas9_genes[ANY > 0,]
 
-#Let's get the length of de_genes and length of cas9_genes
-length(de_genes$gene)
+#Let's get the length of de_CGGFXS_vs_FXS and length of cas9_genes
+length(de_CGGFXS_vs_FXS_SIG$gene)
 length(cas9_genes$gene)
 
 #Let's get the intersection of the two gene lists
-intersect_genes <- intersect(de_genes$gene, cas9_genes$gene)
+intersect_genes <- intersect(de_CGGFXS_vs_FXS_SIG$gene, cas9_genes$gene)
 print(length(intersect_genes))
 print(intersect_genes)
 
@@ -57,7 +61,7 @@ intersect_cas9_sums <- intersect_cas9[, 2:ncol(intersect_cas9)] %>% colSums()
 
 #Let's make this plot
 # Define the sets
-set1 <- de_genes$gene
+set1 <- de_CGGFXS_vs_FXS_SIG$gene
 set2 <- cas9_genes$gene
 
 pdf(file = file.path(base_dir, "overlap_hg19/venn_plot.pdf")) 
@@ -97,7 +101,7 @@ print(length(ZNF703_genes))
 
 #Let's get the intersection of non-intersect de genes and RUNX2_genes and ZNF703_genes
 tf_targets <- unique(c(RUNX2_genes, ZNF703_genes))
-de_only <- de_genes[!de_genes$gene %in% intersect_genes,]$gene
+de_only <- de_CGGFXS_vs_FXS_SIG[!de_CGGFXS_vs_FXS_SIG$gene %in% intersect_genes,]$gene
 de_tf_targets <- intersect(tf_targets, de_only)
 print(length(de_tf_targets))
 #There are only 29 possible targets of TFs according to available chip-seq data
@@ -131,7 +135,7 @@ print(summary(par_clip$total_binding))
 par_clip_genes <- par_clip[par_clip$total_binding >= 2,]$gene
 
 #Let's get the intersection of intersect_par_rip and de non-intersect_genes
-de_only <- de_genes[!de_genes$gene %in% intersect_genes,]$gene
+de_only <- de_CGGFXS_vs_FXS_SIG[!de_CGGFXS_vs_FXS_SIG$gene %in% intersect_genes,]$gene
 intersect_par_rip_gene<- intersect(par_clip_genes, de_only)
 print(length(intersect_par_rip_gene))
 #Only looks like 129 genes are differentialy expressed and have a binding site of FMRP-PAR-CLIP
@@ -141,17 +145,21 @@ print(length(intersect_par_rip_gene))
 intersect_dmr_cas9_genes <- intersect(intersect_genes, dmr_cas9_genes$Gene)
 print(length(intersect_dmr_cas9_genes))
 
-
-### Compare to WT/FXS DE Genes
-de_fxswt_genes <- de_fxswt_genes_all[de_fxswt_genes_all$padj < 0.05 & de_fxswt_genes_all$log2FoldChange >= 1,]
-print(length(de_fxswt_genes$gene))
-
-#Let's get overlap between de_genes and de_fxswt
-intersect_fxswt_genes <- intersect(de_genes$gene, de_fxswt_genes$gene)
+#Let's get overlap between de_CGGFXS_vs_FXS_SIG and de_fxswt
+intersect_fxswt_genes <- intersect(de_CGGFXS_vs_FXS_SIG$gene, de_FXS_vs_WT_SIG$gene)
 print(length(intersect_fxswt_genes))
 
-intersect_de_only_fxswt_genes <- intersect(de_only, de_fxswt_genes$gene)
+intersect_de_only_fxswt_genes <- intersect(de_only, de_FXS_vs_WT_SIG$gene)
 print(length(intersect_de_only_fxswt_genes))
+
+
+
+### How many de genes are in NHG3
+print(length(de_NHG3FXS_vs_FXS_SIG$gene))
+
+#How many overlap with de_FXS_vs_WT
+intersect_fxsnhg3_genes <- intersect(de_FXS_vs_WT_SIG$gene, de_NHG3FXS_vs_FXS_SIG$gene)
+print(length(intersect_fxsnhg3_genes))
 
 
 
