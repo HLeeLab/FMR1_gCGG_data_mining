@@ -14,7 +14,7 @@
 cd /home/cnorton5 || exit 1
 
 
-base_dir=/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/ONT_HG01_hg19
+base_dir=/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/
 methyl_bw="$base_dir/meth_bigwigs"
 dt_folder="$base_dir/dt"
 regions_of_interest_dir="/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/ref/hg19_regions_of_interest"
@@ -28,7 +28,17 @@ mkdir -p $dt_folder
 module load anaconda 
 conda activate dt_env
 
-computeMatrix scale-regions -S "$methyl_bw"/*."$mod_type".bw -R "$regions_path" -o "$dt_folder/$regions_name.$mod_type.matrix.gz"
+#Let's grab each of the bam files of interest, by declaring a list of files
+
+barcode1a="$base_dir/ONT_HG01_hg19/meth_bigwigs/hg19_barcode01.sorted.mc.bw"
+barcode1b="$base_dir/ONT_HG02_hg19/meth_bigwigs/hg19_barcode01.sorted.mc.bw"
+barcode4a="$base_dir/ONT_HG01_hg19/meth_bigwigs/hg19_barcode04.sorted.mc.bw"
+barcode4b="$base_dir/ONT_HG02_hg19/meth_bigwigs/hg19_barcode04.sorted.mc.bw"
+
+#Let's make a list to pass to computeMatrix
+bw_list="$barcode1a $barcode1b $barcode4a $barcode4b"
+
+computeMatrix scale-regions -S $bw_list -R "$regions_path" -o "$dt_folder/$regions_name.$mod_type.matrix.gz"
 plotHeatmap -m "$dt_folder/$regions_name.$mod_type.matrix.gz" -out "$dt_folder/$regions_name.$mod_type.heatmap.png" --colorMap RdBu --plotTitle "Heatmap of methylation levels in $regions_name" --plotFileFormat png
 conda deactivate
 

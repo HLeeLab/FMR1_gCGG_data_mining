@@ -14,6 +14,7 @@ library(ggplot2)
 library(tidyverse)
 library(data.table)
 library(dplyr)
+library(eulerr)
 
 base_dir<- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore"
 
@@ -152,6 +153,55 @@ print(length(intersect_fxswt_genes))
 intersect_de_only_fxswt_genes <- intersect(de_only, de_FXS_vs_WT_SIG$gene)
 print(length(intersect_de_only_fxswt_genes))
 
+#Let's make a venn diagram of the overlap between de_CGGFXS_vs_FXS_SIG, de_FXS_vs_WT_SIG, and de_NHG3FXS_vs_FXS_SIG
+pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3.pdf"))
+
+# Example sets
+set1 <- de_CGGFXS_vs_FXS_SIG$gene
+set2 <- de_FXS_vs_WT_SIG$gene
+set3 <- de_NHG3FXS_vs_FXS_SIG$gene
+
+# Compute overlaps
+n12 <- length(intersect(set1, set2))
+n13 <- length(intersect(set1, set3))
+n23 <- length(intersect(set2, set3))
+n123 <- length(Reduce(intersect, list(set1, set2, set3)))
+
+venn.plot <- draw.triple.venn(
+  area1 = length(set1),
+  area2 = length(set2),
+  area3 = length(set3),
+  n12 = n12,
+  n13 = n13,
+  n23 = n23,
+  n123 = n123,
+  category = c("CGGFXS_vs_FXS_SIG", 
+               "FXS_vs_WT_SIG",
+               "NHG3FXS_vs_FXS_SIG"),
+  fill = c("red", "blue", "green"),
+  alpha = 0.5,
+  cat.pos = c(180, 0, 270),  
+  scaled = TRUE
+)
+
+grid.draw(venn.plot)
+dev.off()
+
+
+venn_data <- euler(c(
+  "CGGFXS_vs_FXS" = length(set1),
+  "WT_vs_FXS" = length(set2),
+  "NHG3FXS_vs_FXS" = length(set3),
+  "CGGFXS_vs_FXS&WT_vs_FXS" = n12,
+  "CGGFXS_vs_FXS&NHG3FXS_vs_FXS" = n13,
+  "WT_vs_FXS&NHG3FXS_vs_FXS" = n23,
+  "CGGFXS_vs_FXS&WT_vs_FXS&NHG3FXS_vs_FXS" = n123
+))
+
+# Plot
+pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3_euler.pdf"))
+plot(venn_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
+dev.off()
 
 
 ### How many de genes are in NHG3
