@@ -47,13 +47,21 @@ performGSEA <- function(file,
   names(geneList) <- res[[gene_column]]
   
   # Sort in decreasing order (required by GSEA)
-  geneList <- sort(geneList, decreasing = TRUE)
+  if (direction == "UP"){
+    geneList <- sort(geneList, decreasing = TRUE)
+  }
+  else{
+    genelist <- sort(geneList, decreasing = FALSE)
+  }
+  
   
   # Download gene sets for the specified species and category using msigdbr.
   msigdbr_df <- msigdbr(species = species)
   
+  print(head(msigdbr_df))
+  
   # Filter for the desired gene set category (e.g., hallmark "H")
-  gene_sets_df <- msigdbr_df %>% filter(gs_cat == gs_category)
+  gene_sets_df <- msigdbr_df %>% filter(gs_collection == gs_category)
   
   # Convert to a list where each element is a gene set (a vector of gene symbols)
   gene_sets <- gene_sets_df %>% 

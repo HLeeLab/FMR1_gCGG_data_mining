@@ -1,6 +1,6 @@
 # ---- Setup and Library Loading ----
 if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
-required_pkgs <- c("VennDiagram", "Rsubread", "DESeq2", "ggplot2", "tidyverse",
+required_pkgs <- c("VennDiagram", "Rsubread", "DESeq2", "ggplot2",
                    "data.table", "dplyr", "eulerr")
 suppressMessages(lapply(required_pkgs, library, character.only = TRUE))
 
