@@ -1,295 +1,210 @@
-# Install necessary packages if not already installed
-if (!requireNamespace("BiocManager", quietly = TRUE)) {
-  install.packages("BiocManager")
+# ---- Setup and Library Loading ----
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+required_pkgs <- c("VennDiagram", "Rsubread", "DESeq2", "ggplot2", "tidyverse",
+                   "data.table", "dplyr", "eulerr")
+suppressMessages(lapply(required_pkgs, library, character.only = TRUE))
+
+base_dir <- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore"
+
+### HELPER FUNCTIONS ###
+filter_by_sig <- function(dt, padj_cutoff = 0.05, lfc_cutoff = 1, direction = "up") {
+  if (direction == "up") {
+    dt[padj < padj_cutoff & log2FoldChange >= lfc_cutoff, ]
+  } else {
+    dt[padj < padj_cutoff & log2FoldChange <= -lfc_cutoff, ]
+  }
 }
 
-# Install required Bioconductor and CRAN packages
-#BiocManager::install(c("Rsubread", "DESeq2", "ggplot2", "tidyverse", "VennDiagram"), ask = FALSE)
+# ---- Plotting Venn Diagrams ----
+plot_venn_pair <- function(set1, set2, cat_labels, file_name) {
+  pdf(file = file.path(base_dir, file_name))
+  venn.plot <- draw.pairwise.venn(
+    area1 = length(set1),
+    area2 = length(set2),
+    cross.area = length(intersect(set1, set2)),
+    category = cat_labels,
+    fill = c("red", "blue"),
+    alpha = 0.5,
+    cat.pos = c(180, 0),
+    cat.dist = c(-0.05, -0.05)
+  )
+  grid.draw(venn.plot)
+  dev.off()
+}
 
-# Load libraries
-library(VennDiagram)
-library(Rsubread)
-library(DESeq2)
-library(ggplot2)
-library(tidyverse)
-library(data.table)
-library(dplyr)
-library(eulerr)
+get_euler <- function(set1, set2, set3, file_name) {
+  
+  # Euler diagram for triple DE comparisons
+  # Compute unique counts (genes only in one category)
+  n12 <- length(intersect(set1, set2))
+  n13 <- length(intersect(set1, set3))
+  n23 <- length(intersect(set2, set3))
+  n123 <- length(Reduce(intersect, list(set1, set2, set3)))
 
-base_dir<- "/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore"
+  only_set1 <- length(set1) - (n12 + n13 - n123)
+  only_set2 <- length(set2) - (n12 + n23 - n123)
+  only_set3 <- length(set3) - (n13 + n23 - n123)
 
-#Let's read the gene table from overlaps
-cas9_genes_all <- fread(paste0(base_dir, "/overlap_hg19/cas9_overlap_matrix_gene.tsv"), header=TRUE, sep="\t")
-de_CGGFXS_vs_FXS <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_dCAS9_CGG/hisat_deseq2_results.csv"), header=TRUE, sep=",")
-de_FXS_vs_WT <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_WT_dCAS9/hisat_deseq2_results.csv"), header=TRUE, sep=",")
-de_NHG3FXS_vs_FXS <- fread(paste0(base_dir, "/RNA_HG01_hg19/FXS_CGG_ONLY_vs_NHG3_dCAS9/hisat_deseq2_results.csv"), header=TRUE, sep=",")
-dmr_cas9_genes <- fread(paste0(base_dir, "/overlap_hg19/dmr_liu_jaenisch/overlap_matrix_gene.tsv"), header=TRUE, sep="\t")
+  # Compute Euler input with adjusted values
+  venn_data <- euler(c(
+    "CGGFXS_vs_FXS" = only_set1,
+    "WT_vs_FXS" = only_set2,
+    "NHG3FXS_vs_FXS" = only_set3,
+    "CGGFXS_vs_FXS&WT_vs_FXS" = n12 - n123,  # Exclude triple overlap
+    "CGGFXS_vs_FXS&NHG3FXS_vs_FXS" = n13 - n123,
+    "WT_vs_FXS&NHG3FXS_vs_FXS" = n23 - n123,
+    "CGGFXS_vs_FXS&WT_vs_FXS&NHG3FXS_vs_FXS" = n123
+  ))
 
-#Rename the first column of both to gene_id
+  # Save plot
+  #pdf(file = file.path(base_dir, file_name))
+  #plot(venn_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
+  #dev.off()
+  return(venn_data)
+}
+
+
+### END OF HELPER FUNCTIONS ###
+
+# ---- Data Loading ----
+cas9_genes_all <- fread(file.path(base_dir, "overlap_hg19/cas9_overlap_matrix_gene.tsv"), header = TRUE, sep = "\t")
+dmr_cas9_genes <- fread(file.path(base_dir, "overlap_hg19/dmr_liu_jaenisch/overlap_matrix_gene.tsv"), header = TRUE, sep = "\t")
+de_CGGFXS_vs_FXS <- fread(file.path(base_dir, "RNA_HG01_hg19/FXS_CGG_ONLY_vs_dCAS9_CGG/hisat_deseq2_results.csv"), header = TRUE, sep = ",")
+de_FXS_vs_WT <- fread(file.path(base_dir, "RNA_HG01_hg19/FXS_CGG_ONLY_vs_WT_dCAS9/hisat_deseq2_results.csv"), header = TRUE, sep = ",")
+de_NHG3FXS_vs_FXS <- fread(file.path(base_dir, "RNA_HG01_hg19/FXS_CGG_ONLY_vs_NHG3_dCAS9/hisat_deseq2_results.csv"), header = TRUE, sep = ",")
+
+# Rename gene columns for consistency
 setnames(cas9_genes_all, "Gene", "gene")
 setnames(dmr_cas9_genes, "Gene", "gene")
 setnames(de_CGGFXS_vs_FXS, "V1", "gene")
-setnames(de_NHG3FXS_vs_FXS, "V1", "gene")
 setnames(de_FXS_vs_WT, "V1", "gene")
+setnames(de_NHG3FXS_vs_FXS, "V1", "gene")
 
-#Let's filter each to only include genes that are in each
-intersect <- intersect(cas9_genes_all$gene, de_CGGFXS_vs_FXS$gene)
-cas9_genes_all <- cas9_genes_all[cas9_genes_all$gene %in% intersect]
-de_CGGFXS_vs_FXS <- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$gene %in% intersect]
-print(length(intersect))
+# ---- Filtering and Intersections ----
+# Filter to common genes between cas9 binding and DE data
+common_genes <- intersect(cas9_genes_all$gene, de_CGGFXS_vs_FXS$gene)
+cas9_genes_all <- cas9_genes_all[gene %in% common_genes]
+de_CGGFXS_vs_FXS <- de_CGGFXS_vs_FXS[gene %in% common_genes]
 
-#Let's filter de_CGGFXS_vs_FXS to only include genes with a p-value < 0.001 and a log2FoldChange > 1.5
-de_CGGFXS_vs_FXS_SIG<- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$padj < 0.05 & de_CGGFXS_vs_FXS$log2FoldChange >= 1,]
-de_FXS_vs_WT_SIG <- de_FXS_vs_WT[de_FXS_vs_WT$padj < 0.05 & de_FXS_vs_WT$log2FoldChange >= 1,]
-de_NHG3FXS_vs_FXS_SIG <- de_NHG3FXS_vs_FXS[de_NHG3FXS_vs_FXS$padj < 0.05 & de_NHG3FXS_vs_FXS$log2FoldChange >= 1,]
+# Filter DE genes (up-regulated)
+de_CGGFXS_vs_FXS_SIG <- filter_by_sig(de_CGGFXS_vs_FXS)
+de_FXS_vs_WT_SIG     <- filter_by_sig(de_FXS_vs_WT)
+de_NHG3FXS_vs_FXS_SIG <- filter_by_sig(de_NHG3FXS_vs_FXS)
 
-#Let's filter cas9_genes to only include genes with "ANY" > 0
-cas9_genes <- cas9_genes_all[ANY > 0,]
-dmr_cas9_genes <- dmr_cas9_genes[ANY > 0,]
+# Further filter cas9 and DMR genes for ANY > 0
+cas9_genes <- cas9_genes_all[ANY > 0, ]
+dmr_cas9_genes <- dmr_cas9_genes[ANY > 0, ]
 
-#Let's get the length of de_CGGFXS_vs_FXS and length of cas9_genes
-length(de_CGGFXS_vs_FXS_SIG$gene)
-length(cas9_genes$gene)
-
-#Let's get the intersection of the two gene lists
+# Intersection between DE genes and cas9 binding genes
 intersect_genes <- intersect(de_CGGFXS_vs_FXS_SIG$gene, cas9_genes$gene)
-print(length(intersect_genes))
+cat("Intersected gene count:", length(intersect_genes), "\n")
 print(intersect_genes)
 
-#Let's see where the Cas9 binding is on each of these
-intersect_cas9 <- cas9_genes_all[cas9_genes_all$gene %in% intersect_genes,]
-intersect_cas9_sums <- intersect_cas9[, 2:ncol(intersect_cas9)] %>% colSums()
+# Sum Cas9 binding signals for intersected genes (excluding gene column)
+intersect_cas9 <- cas9_genes_all[gene %in% intersect_genes, ]
+intersect_cas9_sums <- colSums(intersect_cas9[, -1])
+print(intersect_cas9_sums)
 
-#Let's make this plot
-# Define the sets
-set1 <- de_CGGFXS_vs_FXS_SIG$gene
-set2 <- cas9_genes$gene
+# Save intersected genes to a file
+write.table(intersect_genes, file = file.path(base_dir, "overlap_hg19/cas9_DEFXSvFXSCAS9_intersect_genes.tsv"),
+            sep = "\t", quote = FALSE, row.names = FALSE)
 
-pdf(file = file.path(base_dir, "overlap_hg19/venn_plot.pdf")) 
-
-venn.plot <- draw.pairwise.venn(
-  area1 = length(set1),
-  area2 = length(set2),
-  cross.area = length(intersect(set1, set2)),
-  category = c("DE Genes (padj < 0.05, log2fc > 1)", "Genes with Anti-Cas9 ChIP-Seq Peaks"),
-  fill = c("red", "blue"),
-  alpha = 0.5,
-  cat.pos = c(180, 0),  
-  cat.dist = c(-0.05, -0.05)
-)
-
-grid.draw(venn.plot)
-dev.off()
-
-#Let's save the intersect genes to a file
-write.table(intersect_genes, file=paste0(base_dir, "/overlap_hg19/cas9_DEFXSvFXSCAS9_intersect_genes.tsv"), sep="\t", quote=FALSE, row.names=FALSE)
-
-#Let's see how many of these genes are TFs
-# From https://humantfs.ccbr.utoronto.ca/download/v_1.01/TF_names_v_1.01.txt
-tf_genes <- fread(paste0(base_dir, "/hg19_regions_of_interest/TFs.csv"), header=TRUE, sep=",", data.table=FALSE)
-tf_genes <- tf_genes$"HGNC symbol"
+# ---- TF Analysis ----
+tf_genes <- fread(file.path(base_dir, "hg19_regions_of_interest/TFs.csv"), header = TRUE, sep = ",", data.table = FALSE)[, "HGNC symbol"]
 intersect_tf_genes <- intersect(intersect_genes, tf_genes)
 
-##Let's load in potential targets of these TFs, and see if any of them are in de non-intersect
-# These are from https://chip-atlas.dbcls.jp, and include chip peaks within 5kb
-runx2 <- fread(paste0(base_dir, "/hg19_regions_of_interest/RUNX2.tsv"), header=TRUE, sep="\t", data.table=FALSE)
-ZNF703 <- fread(paste0(base_dir, "/hg19_regions_of_interest/ZNF703.tsv"), header=TRUE, sep="\t", data.table=FALSE)
-RUNX2_genes <- runx2[runx2$`RUNX2|Average` > 250,]$"Target_genes"
-ZNF703_genes <- ZNF703[ZNF703$`ZNF703|Average` > 250,]$"Target_genes"
+# Read potential TF target data
+runx2 <- fread(file.path(base_dir, "hg19_regions_of_interest/RUNX2.tsv"), header = TRUE, sep = "\t", data.table = FALSE)
+ZNF703 <- fread(file.path(base_dir, "hg19_regions_of_interest/ZNF703.tsv"), header = TRUE, sep = "\t", data.table = FALSE)
+RUNX2_genes <- runx2[runx2$`RUNX2|Average` > 250, "Target_genes"]
+ZNF703_genes <- ZNF703[ZNF703$`ZNF703|Average` > 250, "Target_genes"]
 
-print(length(RUNX2_genes))
-print(length(ZNF703_genes))
+cat("RUNX2 targets:", length(RUNX2_genes), "\n")
+cat("ZNF703 targets:", length(ZNF703_genes), "\n")
 
-#Let's get the intersection of non-intersect de genes and RUNX2_genes and ZNF703_genes
 tf_targets <- unique(c(RUNX2_genes, ZNF703_genes))
-de_only <- de_CGGFXS_vs_FXS_SIG[!de_CGGFXS_vs_FXS_SIG$gene %in% intersect_genes,]$gene
+de_only <- setdiff(de_CGGFXS_vs_FXS_SIG$gene, intersect_genes)
 de_tf_targets <- intersect(tf_targets, de_only)
-print(length(de_tf_targets))
-#There are only 29 possible targets of TFs according to available chip-seq data
-                     
-### Now, let's read in PAR-CHIP and RIP-CHIP data
-regions_folder <- paste0(base_dir, "/hg19_regions_of_interest/")
-rip_clip <- fread(paste0(regions_folder, "Ascano_RIPCLIP-6.csv"), header=TRUE, sep=",", data.table=FALSE)
-par_clip <- fread(paste0(regions_folder, "Ascano_PARCLIP-4.csv"), header=TRUE, sep=",", data.table=FALSE)
+cat("DE TF target count:", length(de_tf_targets), "\n")
 
-#Rename Columns
-setnames(rip_clip, "RIP LFE (log2 fold enrichment)", "RIP_LF2")
+# ---- PAR-CLIP and RIP-CLIP Data ----
+regions_folder <- file.path(base_dir, "hg19_regions_of_interest/")
+rip_clip <- fread(file.path(regions_folder, "Ascano_RIPCLIP-6.csv"), header = TRUE, sep = ",", data.table = FALSE)
+par_clip <- fread(file.path(regions_folder, "Ascano_PARCLIP-4.csv"), header = TRUE, sep = ",", data.table = FALSE)
+
+# Rename columns for clarity
 setnames(rip_clip, "Supplementary Table 6 FLAG-HA FMRP iso1 RIP-chip Gene symbol", "gene")
-setnames(par_clip, "FMR1 iso1_Reads", "iso1_reads")
-setnames(par_clip, "FMR1 iso7_Reads", "iso7_reads")
-setnames(par_clip, "FMR1 iso1_Total mRNA binding sites", "iso1_mRNA_binding_sites")
-setnames(par_clip, "FMR1 iso7_Total mRNA binding sites", "iso7_mRNA_binding_sites")
+setnames(rip_clip, "RIP LFE (log2 fold enrichment)", "RIP_LF2")
 setnames(par_clip, "Gene", "gene")
+setnames(par_clip,
+         c("FMR1 iso1_Reads", "FMR1 iso7_Reads",
+           "FMR1 iso1_Total mRNA binding sites", "FMR1 iso7_Total mRNA binding sites"),
+         c("iso1_reads", "iso7_reads", "iso1_mRNA_binding_sites", "iso7_mRNA_binding_sites"))
 
-#Remove all genes with "NA" in the RIP_LF2 column, and over 2 LFC
-rip_clip <- rip_clip[!is.na(rip_clip$RIP_LF2),]
-rip_clip_genes <- rip_clip[rip_clip$RIP_LF2 >= 1,]$gene
-#After finding the intersection of ripclip and par_clip (940), 
-# only 19 genes were in the DE genes that were not in ANTI-CAS9 binding site.
-# We will now stick to par_clip as a more lenient filter
-
-#Let's get distribution of iso1_reads and iso1_mRNA_binding_sites
+# Filter RIP-CLIP data and calculate PAR-CLIP binding totals
+rip_clip <- rip_clip[!is.na(RIP_LF2) & RIP_LF2 >= 1, ]
 par_clip$total_binding <- par_clip$iso1_mRNA_binding_sites + par_clip$iso7_mRNA_binding_sites
+cat("Total binding summary:\n")
 print(summary(par_clip$total_binding))
+par_clip_genes <- par_clip[par_clip$total_binding >= 6, "gene"]
 
-#Let's select only genes with total_binding >= 2
-par_clip_genes <- par_clip[par_clip$total_binding >= 6,]$gene
+# Intersection of PAR/RIP binding genes with DE genes not in Cas9 peaks
+de_only <- setdiff(de_CGGFXS_vs_FXS_SIG$gene, intersect_genes)
+intersect_par_rip_gene <- intersect(par_clip_genes, de_only)
+cat("Intersection of PAR/RIP genes with DE only:", length(intersect_par_rip_gene), "\n")
 
-#Let's get the intersection of intersect_par_rip and de non-intersect_genes
-de_only <- de_CGGFXS_vs_FXS_SIG[!de_CGGFXS_vs_FXS_SIG$gene %in% intersect_genes,]$gene
-intersect_par_rip_gene<- intersect(par_clip_genes, de_only)
-print(length(intersect_par_rip_gene))
-#Only looks like 129 genes are differentialy expressed and have a binding site of FMRP-PAR-CLIP
-#With 10 binding sites, there are only 52
-#With 6, there are 74
+# ---- DMR and Additional DE Overlaps ----
+intersect_dmr_cas9_genes <- intersect(intersect_genes, dmr_cas9_genes$gene)
+cat("DMR & Cas9 intersect count:", length(intersect_dmr_cas9_genes), "\n")
 
-
-#Let's see which of the intersect are also in the dmr genes
-intersect_dmr_cas9_genes <- intersect(intersect_genes, dmr_cas9_genes$Gene)
-print(length(intersect_dmr_cas9_genes))
-
-#Let's get overlap between de_CGGFXS_vs_FXS_SIG and de_fxswt
 intersect_fxswt_genes <- intersect(de_CGGFXS_vs_FXS_SIG$gene, de_FXS_vs_WT_SIG$gene)
-print(length(intersect_fxswt_genes))
+cat("Overlap between CGGFXS_vs_FXS_SIG & FXS_vs_WT_SIG:", length(intersect_fxswt_genes), "\n")
 
 intersect_de_only_fxswt_genes <- intersect(de_only, de_FXS_vs_WT_SIG$gene)
-print(length(intersect_de_only_fxswt_genes))
+cat("Overlap between DE-only and FXS_vs_WT_SIG:", length(intersect_de_only_fxswt_genes), "\n")
 
-#Let's make a venn diagram of the overlap between de_CGGFXS_vs_FXS_SIG, de_FXS_vs_WT_SIG, and de_NHG3FXS_vs_FXS_SIG
-pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3.pdf"))
-
-# Example sets
+### ---- Up-Regulated Genes ----
 set1 <- de_CGGFXS_vs_FXS_SIG$gene
 set2 <- de_FXS_vs_WT_SIG$gene
 set3 <- de_NHG3FXS_vs_FXS_SIG$gene
 
-# Compute overlaps
-n12 <- length(intersect(set1, set2))
-n13 <- length(intersect(set1, set3))
-n23 <- length(intersect(set2, set3))
-n123 <- length(Reduce(intersect, list(set1, set2, set3)))
-
-venn.plot <- draw.triple.venn(
-  area1 = length(set1),
-  area2 = length(set2),
-  area3 = length(set3),
-  n12 = n12,
-  n13 = n13,
-  n23 = n23,
-  n123 = n123,
-  category = c("CGGFXS_vs_FXS_SIG", 
-               "FXS_vs_WT_SIG",
-               "NHG3FXS_vs_FXS_SIG"),
-  fill = c("red", "blue", "green"),
-  alpha = 0.5,
-  cat.pos = c(180, 0, 270),  
-  scaled = TRUE
-)
-
-grid.draw(venn.plot)
+#Euler
+euler_data <- get_euler(set1, set2, set3, "overlap_hg19/venn_plot3_euler_up.pdf")
+pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3_euler_up.pdf"))
+plot(euler_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
 dev.off()
 
-
-venn_data <- euler(c(
-  "CGGFXS_vs_FXS" = length(set1),
-  "WT_vs_FXS" = length(set2),
-  "NHG3FXS_vs_FXS" = length(set3),
-  "CGGFXS_vs_FXS&WT_vs_FXS" = n12,
-  "CGGFXS_vs_FXS&NHG3FXS_vs_FXS" = n13,
-  "WT_vs_FXS&NHG3FXS_vs_FXS" = n23,
-  "CGGFXS_vs_FXS&WT_vs_FXS&NHG3FXS_vs_FXS" = n123
-))
-
-# Plot
-pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3_euler.pdf"))
-plot(venn_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
-dev.off()
+# Venn diagram for DE genes vs. Cas9 binding genes (up-regulated)
+set_DE <- de_CGGFXS_vs_FXS_SIG$gene
+set_Cas9 <- cas9_genes$gene
+plot_venn_pair(set_DE, set_Cas9,
+               c("DE Genes (padj < 0.05, log2fc > 1)", "Genes with Anti-Cas9 ChIP-Seq Peaks"),
+               "overlap_hg19/venn_plot_up_CAS9_bind.pdf")
 
 
-### How many de genes are in NHG3
-print(length(de_NHG3FXS_vs_FXS_SIG$gene))
+### ---- Down-Regulated Genes ----
+de_CGGFXS_vs_FXS_SIG_Down <- filter_by_sig(de_CGGFXS_vs_FXS, direction = "down")
+de_FXS_vs_WT_SIG_Down     <- filter_by_sig(de_FXS_vs_WT, direction = "down")
+de_NHG3FXS_vs_FXS_SIG_Down <- filter_by_sig(de_NHG3FXS_vs_FXS, direction = "down")
 
-#How many overlap with de_FXS_vs_WT
-intersect_fxsnhg3_genes <- intersect(de_FXS_vs_WT_SIG$gene, de_NHG3FXS_vs_FXS_SIG$gene)
-print(length(intersect_fxsnhg3_genes))
+set1_down <- de_CGGFXS_vs_FXS_SIG_Down$gene
+set2_down <- de_FXS_vs_WT_SIG_Down$gene
+set3_down <- de_NHG3FXS_vs_FXS_SIG_Down$gene
 
-
-de_CGGFXS_vs_FXS_SIG_Down<- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$padj < 0.05 & de_CGGFXS_vs_FXS$log2FoldChange <= -1,]
-de_FXS_vs_WT_SIG_Down <- de_FXS_vs_WT[de_FXS_vs_WT$padj < 0.05 & de_FXS_vs_WT$log2FoldChange <= -1,]
-de_NHG3FXS_vs_FXS_SIG_Down <- de_NHG3FXS_vs_FXS[de_NHG3FXS_vs_FXS$padj < 0.05 & de_NHG3FXS_vs_FXS$log2FoldChange <= -1,]
-
-set1 <- de_CGGFXS_vs_FXS_SIG_Down$gene
-set2 <- de_FXS_vs_WT_SIG_Down$gene
-set3 <- de_NHG3FXS_vs_FXS_SIG_Down$gene
-
-# Compute overlaps
-n12 <- length(intersect(set1, set2))
-n13 <- length(intersect(set1, set3))
-n23 <- length(intersect(set2, set3))
-n123 <- length(Reduce(intersect, list(set1, set2, set3)))
-
-venn.plot <- draw.triple.venn(
-  area1 = length(set1),
-  area2 = length(set2),
-  area3 = length(set3),
-  n12 = n12,
-  n13 = n13,
-  n23 = n23,
-  n123 = n123,
-  category = c("CGGFXS_vs_FXS_SIG", 
-               "FXS_vs_WT_SIG",
-               "NHG3FXS_vs_FXS_SIG"),
-  fill = c("red", "blue", "green"),
-  alpha = 0.5,
-  cat.pos = c(180, 0, 270),  
-  scaled = TRUE
-)
-
-grid.draw(venn.plot)
-dev.off()
-
-
-venn_data <- euler(c(
-  "CGGFXS_vs_FXS" = length(set1),
-  "WT_vs_FXS" = length(set2),
-  "NHG3FXS_vs_FXS" = length(set3),
-  "CGGFXS_vs_FXS&WT_vs_FXS" = n12,
-  "CGGFXS_vs_FXS&NHG3FXS_vs_FXS" = n13,
-  "WT_vs_FXS&NHG3FXS_vs_FXS" = n23,
-  "CGGFXS_vs_FXS&WT_vs_FXS&NHG3FXS_vs_FXS" = n123
-))
-
-# Plot
+#Euler
+down_euler_data <- get_euler(set1_down, set2_down, set3_down, "overlap_hg19/venn_plot3_euler_down.pdf")
 pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3_euler_down.pdf"))
-plot(venn_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
+plot(down_euler_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
 dev.off()
 
+#Venn Pair
+plot_venn_pair(set1_down, set_Cas9,
+               c("DE Genes Down (padj < 0.05, log2fc <= -1)", "Genes with Anti-Cas9 ChIP-Seq Peaks"),
+               "overlap_hg19/venn_plot_down_CAS9_bind.pdf")
 
-set1 <- de_CGGFXS_vs_FXS_SIG_Down$gene
-set2 <- cas9_genes$gene
-
-pdf(file = file.path(base_dir, "overlap_hg19/venn_plot_down.pdf")) 
-
-venn.plot <- draw.pairwise.venn(
-  area1 = length(set1),
-  area2 = length(set2),
-  cross.area = length(intersect(set1, set2)),
-  category = c("DE Genes (padj < 0.05, log2fc > 1)", "Genes with Anti-Cas9 ChIP-Seq Peaks"),
-  fill = c("red", "blue"),
-  alpha = 0.5,
-  cat.pos = c(180, 0),  
-  cat.dist = c(-0.05, -0.05)
-)
-
-grid.draw(venn.plot)
-dev.off()
-
-
-par_clip_genes <- par_clip[par_clip$total_binding >= 6,]$gene
-#Let's get the intersection of intersect_par_rip and de non-intersect_genes
-de_only <- de_CGGFXS_vs_FXS_SIG_Down[!de_CGGFXS_vs_FXS_SIG_Down$gene %in% intersect_genes,]$gene
-intersect_par_rip_gene<- intersect(par_clip_genes, de_only)
-print(length(intersect_par_rip_gene))
+de_only_down <- setdiff(de_CGGFXS_vs_FXS_SIG_Down$gene, intersect_genes)
+intersect_par_rip_gene_down <- intersect(par_clip_genes, de_only_down)
+cat("Intersection of PAR/RIP genes with DE-only down:", length(intersect_par_rip_gene_down), "\n")
 
 
 
