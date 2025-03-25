@@ -15,6 +15,9 @@ set -e
 
 # Set the working directory to the user's home directory 
 cd /home/cnorton5 || exit 1
+
+module load bedtools
+
 base_dir=/home/cnorton5/scr4_hlee308/cnorton5/old_nanopore/H3K9me3
 ref_dir=/home/cnorton5/data_hlee308/cnorton5/ref
 INPUT_BW="$base_dir/GSM6754719_1H2-H3K9me3_hg38.bw"
@@ -25,7 +28,7 @@ CHAIN_FILE="$ref_dir/liftover/hg38ToHg19.over.chain"
 HG19_SIZES="$ref_dir/hg19.chrom.sizes"
 
 # Check if input file is provided
-if [ -z "$INPUT_BW" ] || [ -z "$OUTPUT_BW" ]; then
+if [ -z "$INPUT_BW" ]; then
     echo "Usage: $0 <input.hg38.bw> <output.hg19.bw>"
     exit 1
 fi
@@ -33,27 +36,35 @@ fi
 # Download required files if not present
 if [ ! -f "$CHAIN_FILE" ]; then
     echo "Downloading chain file..."
-    wget http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz
+    wget http://hgdownload.soe.ucsc.edu/goldenPath/hg38/liftOver/hg38ToHg19.over.chain.gz -O "$ref_dir/hg19.chrom.sizes"
 fi
 
 if [ ! -f "$HG19_SIZES" ]; then
     echo "Downloading hg19 chromosome sizes..."
-    fetchChromSizes hg19 > hg19.chrom.sizes
+    fetchChromSizes hg19 > "$ref_dir/liftover/hg38ToHg19.over.chain"
 fi
 
 # Convert BigWig to BedGraph
 echo "Converting BigWig to BedGraph..."
-bigWigToBedGraph "$INPUT_BW" $base_dir/temp.hg38.bedGraph
+#bigWigToBedGraph "$INPUT_BW" $base_dir/temp.hg38.bedGraph
 
 # Run LiftOver
 echo "Running LiftOver..."
-liftOver $base_dir/temp.hg38.bedGraph "$CHAIN_FILE" $base_dir/hg19.bedGraph unmapped.bed
+##liftOver $base_dir/temp.hg38.bedGraph "$CHAIN_FILE" $base_dir/hg19.bedGraph unmapped.bed
 
 # Convert BedGraph back to BigWig
-echo "Converting BedGraph back to BigWig..."
+
 #First, sort the bedGraph file
-sort -k1,1 -k2,2n $base_dir/hg19.bedGraph > $base_dir/hg19.sorted.bedGraph
-bedGraphToBigWig $base_dir/hg19.sorted.bedGraph "$HG19_SIZES" "$OUTPUT_BW"
+#Let's create a temporory bed_file that only includes column1 values that are located in the first column of the chrom_sizes file
+#awk 'NR==FNR{a[$1];next}($1 in a)' $HG19_SIZES $base_dir/hg19.bedGraph > "$base_dir/temp.bedGraph"
+
+echo "Sorting BedGraph file..."
+#sort -k1,1 -k2,2n $base_dir/temp.bedGraph > $base_dir/hg19.sorted.bedGraph
+
+bedtools genomecov -bg -i hg19.sorted.bedGraph -g genome.chrom.sizes > merged.hg19.sorted.bedGraph
+
+echo "Converting BedGraph back to BigWig..."
+bedGraphToBigWig $base_dir/merged.hg19.sorted.bedGraph# "$HG19_SIZES" "$OUTPUT_BW"
 
 # Cleanup temporary files
 echo "Cleaning up..."

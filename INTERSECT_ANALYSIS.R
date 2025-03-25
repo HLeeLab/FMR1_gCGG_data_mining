@@ -133,13 +133,15 @@ par_clip$total_binding <- par_clip$iso1_mRNA_binding_sites + par_clip$iso7_mRNA_
 print(summary(par_clip$total_binding))
 
 #Let's select only genes with total_binding >= 2
-par_clip_genes <- par_clip[par_clip$total_binding >= 2,]$gene
+par_clip_genes <- par_clip[par_clip$total_binding >= 6,]$gene
 
 #Let's get the intersection of intersect_par_rip and de non-intersect_genes
 de_only <- de_CGGFXS_vs_FXS_SIG[!de_CGGFXS_vs_FXS_SIG$gene %in% intersect_genes,]$gene
 intersect_par_rip_gene<- intersect(par_clip_genes, de_only)
 print(length(intersect_par_rip_gene))
 #Only looks like 129 genes are differentialy expressed and have a binding site of FMRP-PAR-CLIP
+#With 10 binding sites, there are only 52
+#With 6, there are 74
 
 
 #Let's see which of the intersect are also in the dmr genes
@@ -211,6 +213,83 @@ print(length(de_NHG3FXS_vs_FXS_SIG$gene))
 intersect_fxsnhg3_genes <- intersect(de_FXS_vs_WT_SIG$gene, de_NHG3FXS_vs_FXS_SIG$gene)
 print(length(intersect_fxsnhg3_genes))
 
+
+de_CGGFXS_vs_FXS_SIG_Down<- de_CGGFXS_vs_FXS[de_CGGFXS_vs_FXS$padj < 0.05 & de_CGGFXS_vs_FXS$log2FoldChange <= -1,]
+de_FXS_vs_WT_SIG_Down <- de_FXS_vs_WT[de_FXS_vs_WT$padj < 0.05 & de_FXS_vs_WT$log2FoldChange <= -1,]
+de_NHG3FXS_vs_FXS_SIG_Down <- de_NHG3FXS_vs_FXS[de_NHG3FXS_vs_FXS$padj < 0.05 & de_NHG3FXS_vs_FXS$log2FoldChange <= -1,]
+
+set1 <- de_CGGFXS_vs_FXS_SIG_Down$gene
+set2 <- de_FXS_vs_WT_SIG_Down$gene
+set3 <- de_NHG3FXS_vs_FXS_SIG_Down$gene
+
+# Compute overlaps
+n12 <- length(intersect(set1, set2))
+n13 <- length(intersect(set1, set3))
+n23 <- length(intersect(set2, set3))
+n123 <- length(Reduce(intersect, list(set1, set2, set3)))
+
+venn.plot <- draw.triple.venn(
+  area1 = length(set1),
+  area2 = length(set2),
+  area3 = length(set3),
+  n12 = n12,
+  n13 = n13,
+  n23 = n23,
+  n123 = n123,
+  category = c("CGGFXS_vs_FXS_SIG", 
+               "FXS_vs_WT_SIG",
+               "NHG3FXS_vs_FXS_SIG"),
+  fill = c("red", "blue", "green"),
+  alpha = 0.5,
+  cat.pos = c(180, 0, 270),  
+  scaled = TRUE
+)
+
+grid.draw(venn.plot)
+dev.off()
+
+
+venn_data <- euler(c(
+  "CGGFXS_vs_FXS" = length(set1),
+  "WT_vs_FXS" = length(set2),
+  "NHG3FXS_vs_FXS" = length(set3),
+  "CGGFXS_vs_FXS&WT_vs_FXS" = n12,
+  "CGGFXS_vs_FXS&NHG3FXS_vs_FXS" = n13,
+  "WT_vs_FXS&NHG3FXS_vs_FXS" = n23,
+  "CGGFXS_vs_FXS&WT_vs_FXS&NHG3FXS_vs_FXS" = n123
+))
+
+# Plot
+pdf(file = file.path(base_dir, "overlap_hg19/venn_plot3_euler_down.pdf"))
+plot(venn_data, fills = c("red", "blue", "green"), alpha = 0.5, quantities = TRUE)
+dev.off()
+
+
+set1 <- de_CGGFXS_vs_FXS_SIG_Down$gene
+set2 <- cas9_genes$gene
+
+pdf(file = file.path(base_dir, "overlap_hg19/venn_plot_down.pdf")) 
+
+venn.plot <- draw.pairwise.venn(
+  area1 = length(set1),
+  area2 = length(set2),
+  cross.area = length(intersect(set1, set2)),
+  category = c("DE Genes (padj < 0.05, log2fc > 1)", "Genes with Anti-Cas9 ChIP-Seq Peaks"),
+  fill = c("red", "blue"),
+  alpha = 0.5,
+  cat.pos = c(180, 0),  
+  cat.dist = c(-0.05, -0.05)
+)
+
+grid.draw(venn.plot)
+dev.off()
+
+
+par_clip_genes <- par_clip[par_clip$total_binding >= 6,]$gene
+#Let's get the intersection of intersect_par_rip and de non-intersect_genes
+de_only <- de_CGGFXS_vs_FXS_SIG_Down[!de_CGGFXS_vs_FXS_SIG_Down$gene %in% intersect_genes,]$gene
+intersect_par_rip_gene<- intersect(par_clip_genes, de_only)
+print(length(intersect_par_rip_gene))
 
 
 
